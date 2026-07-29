@@ -21,6 +21,7 @@ from actual.queries import (
     get_accounts,
     get_accumulated_budgeted_balance,
     get_budgets,
+    reconcile_transaction,
 )
 from requests.exceptions import ConnectionError, SSLError
 
@@ -191,6 +192,65 @@ class ActualBudget:
         with self._lock:
             self._ensure_session()
             self.actual.sync()
+
+    # -- transactions ---------------------------------------------------------
+
+    async def add_transaction(
+        self,
+        account: str,
+        date: datetime.date,
+        amount: float,
+        payee: str | None = None,
+        notes: str | None = None,
+        category: str | None = None,
+        imported_id: str | None = None,
+        cleared: bool = False,
+    ) -> str:
+        """Create or reconcile a transaction and commit it.
+
+        Uses reconcile_transaction (not create_transaction) so that passing
+        the same imported_id twice (e.g. an automation re-running for the
+        same bill) updates the existing transaction instead of duplicating
+        it. Returns the transaction id.
+        """
+        return await self.hass.async_add_executor_job(
+            self._add_transaction_sync,
+            account,
+            date,
+            amount,
+            payee,
+            notes,
+            category,
+            imported_id,
+            cleared,
+        )
+
+    def _add_transaction_sync(
+        self,
+        account: str,
+        date: datetime.date,
+        amount: float,
+        payee: str | None,
+        notes: str | None,
+        category: str | None,
+        imported_id: str | None,
+        cleared: bool,
+    ) -> str:
+        with self._lock:
+            session = self._ensure_session()
+            txn = reconcile_transaction(
+                session,
+                date=date,
+                account=account,
+                payee=payee,
+                notes=notes,
+                category=category,
+                amount=amount,
+                imported_id=imported_id,
+                cleared=cleared,
+            )
+            self.actual.commit()
+            return str(txn.id)
 
     # -- connection test ----------------------------------------------------
 
