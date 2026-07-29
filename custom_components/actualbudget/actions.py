@@ -14,9 +14,20 @@ from homeassistant.core import (
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.exceptions import ServiceValidationError
 
+from homeassistant.core import SupportsResponse
+from homeassistant.helpers import config_validation as cv
+
 from .actualbudget import ActualBudget
 from .const import (
+    ATTR_ACCOUNT,
+    ATTR_AMOUNT,
+    ATTR_CATEGORY,
+    ATTR_CLEARED,
     ATTR_CONFIG_ENTRY_ID,
+    ATTR_DATE,
+    ATTR_IMPORTED_ID,
+    ATTR_NOTES,
+    ATTR_PAYEE,
     DOMAIN,
 )
 from .coordinator import ActualBudgetCoordinator
@@ -71,6 +82,25 @@ def register_actions(hass: HomeAssistant) -> None:
             }
         ),
     )
+    hass.services.async_register(
+        DOMAIN,
+        "add_transaction",
+        handle_add_transaction,
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_CONFIG_ENTRY_ID): str,
+                vol.Required(ATTR_ACCOUNT): str,
+                vol.Required(ATTR_DATE): cv.date,
+                vol.Required(ATTR_AMOUNT): vol.Coerce(float),
+                vol.Optional(ATTR_PAYEE): str,
+                vol.Optional(ATTR_NOTES): str,
+                vol.Optional(ATTR_CATEGORY): str,
+                vol.Optional(ATTR_IMPORTED_ID): str,
+                vol.Optional(ATTR_CLEARED, default=False): bool,
+            }
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
 
 
 async def handle_bank_sync(call: ServiceCall) -> ServiceResponse:
@@ -93,3 +123,38 @@ async def handle_budget_sync(call: ServiceCall) -> ServiceResponse:
     coordinator: ActualBudgetCoordinator = entry_data["coordinator"]
     await _run_sync(coordinator, api.run_budget_sync)
     _LOGGER.debug("actualbudget.budget_sync completed for entry %s", entry_id)
+
+
+async def handle_add_transaction(call: ServiceCall) -> ServiceResponse:
+    """Handle the add_transaction service action call.
+
+    Uses reconcile_transaction under the hood (see actualbudget.py), so
+    calling this again with the same imported_id updates the existing
+    transaction instead of creating a duplicate - safe to call repeatedly
+    from an automation that re-checks a bill/invoice sensor.
+    """
+    entry_id = call.data[ATTR_CONFIG_ENTRY_ID]
+    _LOGGER.debug("actualbudget.add_transaction invoked for entry %s", entry_id)
+    entry_data = _get_entry_data(call.hass, entry_id)
+    api: ActualBudget = entry_data["api"]
+    coordinator: ActualBudgetCoordinator = entry_data["coordinator"]
+
+    coordinator.set_syncing(True)
+    try:
+        transaction_id = await api.add_transaction(
+            account=call.data[ATTR_ACCOUNT],
+            date=call.data[ATTR_DATE],
+            amount=call.data[ATTR_AMOUNT],
+            payee=call.data.get(ATTR_PAYEE),
+            notes=call.data.get(ATTR_NOTES),
+            category=call.data.get(ATTR_CATEGORY),
+            imported_id=call.data.get(ATTR_IMPORTED_ID),
+            cleared=call.data.get(ATTR_CLEARED, False),
+        )
+        await coordinator.async_refresh()
+    finally:
+        coordinator.set_syncing(False)
+    _LOGGER.debug(
+        "actualbudget.add_transaction completed for entry %s: %s", entry_id, transaction_id
+    )
+    return {"transaction_id": transaction_id}
