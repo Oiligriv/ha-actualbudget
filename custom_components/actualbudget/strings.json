@@ -54,6 +54,48 @@
           "description": "Select the Actual Budget instance to perform the budget sync on."
         }
       }
+    },
+    "add_transaction": {
+      "name": "Add transaction",
+      "description": "Creates (or updates, if imported_id matches an existing transaction) a transaction in Actual Budget. Useful for recording bills/invoices from other integrations precisely, without waiting on a generic bank sync.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Actual Budget instance",
+          "description": "Select the Actual Budget instance to add the transaction to."
+        },
+        "account": {
+          "name": "Account",
+          "description": "Name of the Actual Budget account to add the transaction to."
+        },
+        "date": {
+          "name": "Date",
+          "description": "Date of the transaction."
+        },
+        "amount": {
+          "name": "Amount",
+          "description": "Positive for a deposit, negative for a payment/expense."
+        },
+        "payee": {
+          "name": "Payee",
+          "description": "Payee name. Created automatically if it doesn't exist yet."
+        },
+        "notes": {
+          "name": "Notes",
+          "description": "Optional free-text note on the transaction."
+        },
+        "category": {
+          "name": "Category",
+          "description": "Optional budget category. Created automatically if it doesn't exist yet."
+        },
+        "imported_id": {
+          "name": "Imported ID",
+          "description": "Optional stable unique id (e.g. an invoice number). Calling this action again with the same imported_id updates that transaction instead of creating a duplicate."
+        },
+        "cleared": {
+          "name": "Cleared",
+          "description": "Mark the transaction as cleared/reconciled."
+        }
+      }
     }
   }
 }
