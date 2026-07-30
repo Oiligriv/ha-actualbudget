@@ -96,6 +96,24 @@
           "description": "Mark the transaction as cleared/reconciled."
         }
       }
+    },
+    "clear_account": {
+      "name": "Clear account",
+      "description": "Permanently deletes every transaction on an account. Irreversible short of restoring a budget-file backup - requires confirm to be set to true.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Actual Budget instance",
+          "description": "Select the Actual Budget instance to clear the account on."
+        },
+        "account": {
+          "name": "Account",
+          "description": "Name of the Actual Budget account to delete all transactions from."
+        },
+        "confirm": {
+          "name": "Confirm",
+          "description": "Must be set to true. A safeguard against accidentally wiping an account's transactions."
+        }
+      }
     }
   }
 }
