@@ -27,6 +27,7 @@ from .const import (
     ATTR_CONFIRM,
     ATTR_DATE,
     ATTR_IMPORTED_ID,
+    ATTR_MONTHS,
     ATTR_NOTES,
     ATTR_PAYEE,
     ATTR_TRANSACTIONS,
@@ -141,6 +142,20 @@ def register_actions(hass: HomeAssistant) -> None:
         ),
         supports_response=SupportsResponse.OPTIONAL,
     )
+    hass.services.async_register(
+        DOMAIN,
+        "set_budget",
+        handle_set_budget,
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_CONFIG_ENTRY_ID): str,
+                vol.Required(ATTR_CATEGORY): str,
+                vol.Required(ATTR_AMOUNT): vol.Coerce(float),
+                vol.Required(ATTR_MONTHS): [str],
+            }
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
 
 
 async def handle_bank_sync(call: ServiceCall) -> ServiceResponse:
@@ -235,6 +250,38 @@ async def handle_clear_account(call: ServiceCall) -> ServiceResponse:
         entry_id, account, deleted_count,
     )
     return {"deleted_count": deleted_count}
+
+
+async def handle_set_budget(call: ServiceCall) -> ServiceResponse:
+    """Handle the set_budget service action call.
+
+    Sets (creates or overwrites) the envelope-budget amount for a category,
+    for each month listed. Uses create_budget under the hood, which already
+    replaces the amount if a budget entry for that category/month exists.
+    """
+    entry_id = call.data[ATTR_CONFIG_ENTRY_ID]
+    category = call.data[ATTR_CATEGORY]
+    amount = call.data[ATTR_AMOUNT]
+    months = call.data[ATTR_MONTHS]
+    _LOGGER.debug(
+        "actualbudget.set_budget invoked for entry %s: category=%r amount=%s months=%s",
+        entry_id, category, amount, months,
+    )
+    entry_data = _get_entry_data(call.hass, entry_id)
+    api: ActualBudget = entry_data["api"]
+    coordinator: ActualBudgetCoordinator = entry_data["coordinator"]
+
+    coordinator.set_syncing(True)
+    try:
+        count = await api.set_budget(category, amount, months)
+        await coordinator.async_refresh()
+    finally:
+        coordinator.set_syncing(False)
+    _LOGGER.debug(
+        "actualbudget.set_budget completed for entry %s: %s month-entries written",
+        entry_id, count,
+    )
+    return {"months_set": count}
 
 
 async def handle_import_transactions(call: ServiceCall) -> ServiceResponse:
