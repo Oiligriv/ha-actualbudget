@@ -114,6 +114,20 @@
           "description": "Must be set to true. A safeguard against accidentally wiping an account's transactions."
         }
       }
+    },
+    "import_transactions": {
+      "name": "Import transactions",
+      "description": "Bulk variant of Add transaction: creates/reconciles many transactions in a single commit. Useful for backfilling a bank statement export.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Actual Budget instance",
+          "description": "Select the Actual Budget instance to import the transactions into."
+        },
+        "transactions": {
+          "name": "Transactions",
+          "description": "List of transaction objects, each with the same fields as Add transaction (account, date, amount, payee, notes, category, imported_id, cleared)."
+        }
+      }
     }
   }
 }
