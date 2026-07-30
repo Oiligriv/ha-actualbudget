@@ -128,6 +128,28 @@
           "description": "List of transaction objects, each with the same fields as Add transaction (account, date, amount, payee, notes, category, imported_id, cleared)."
         }
       }
+    },
+    "set_budget": {
+      "name": "Set budget",
+      "description": "Sets (creates or overwrites) the envelope-budget amount for a category, for one or more months.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Actual Budget instance",
+          "description": "Select the Actual Budget instance to set the budget on."
+        },
+        "category": {
+          "name": "Category",
+          "description": "Name of the budget category to set."
+        },
+        "amount": {
+          "name": "Amount",
+          "description": "Monthly budgeted amount for this category."
+        },
+        "months": {
+          "name": "Months",
+          "description": "List of months to set this amount for, as YYYY-MM strings (e.g. [\"2026-08\", \"2026-09\"])."
+        }
+      }
     }
   }
 }
