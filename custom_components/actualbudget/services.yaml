@@ -75,3 +75,15 @@ clear_account:
       required: true
       selector:
         boolean:
+
+import_transactions:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: actualbudget
+    transactions:
+      required: true
+      selector:
+        object:
