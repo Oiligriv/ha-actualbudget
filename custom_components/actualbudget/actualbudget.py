@@ -253,6 +253,40 @@ class ActualBudget:
             self.actual.commit()
             return str(txn.id)
 
+    async def import_transactions(self, transactions: list[dict]) -> int:
+        """Bulk-create/reconcile many transactions in a single session+commit.
+
+        Each dict in `transactions` accepts the same keys as add_transaction
+        (account, date, amount, payee, notes, category, imported_id, cleared).
+        Committing once at the end (instead of once per transaction) is what
+        makes this practical for a few hundred rows - many small commits
+        against a synced Actual file is slow and needlessly re-triggers sync
+        bookkeeping for every single row.
+        """
+        return await self.hass.async_add_executor_job(
+            self._import_transactions_sync, transactions
+        )
+
+    def _import_transactions_sync(self, transactions: list[dict]) -> int:
+        with self._lock:
+            session = self._ensure_session()
+            count = 0
+            for t in transactions:
+                reconcile_transaction(
+                    session,
+                    date=t["date"],
+                    account=t["account"],
+                    payee=t.get("payee"),
+                    notes=t.get("notes"),
+                    category=t.get("category"),
+                    amount=t["amount"],
+                    imported_id=t.get("imported_id"),
+                    cleared=t.get("cleared", False),
+                )
+                count += 1
+            self.actual.commit()
+            return count
+
     async def clear_account(self, account: str) -> int:
         """Delete every transaction on an account and commit. Returns the count deleted.
 
