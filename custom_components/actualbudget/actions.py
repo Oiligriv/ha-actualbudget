@@ -29,6 +29,7 @@ from .const import (
     ATTR_IMPORTED_ID,
     ATTR_NOTES,
     ATTR_PAYEE,
+    ATTR_TRANSACTIONS,
     DOMAIN,
 )
 from .coordinator import ActualBudgetCoordinator
@@ -111,6 +112,31 @@ def register_actions(hass: HomeAssistant) -> None:
                 vol.Required(ATTR_CONFIG_ENTRY_ID): str,
                 vol.Required(ATTR_ACCOUNT): str,
                 vol.Required(ATTR_CONFIRM): bool,
+            }
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "import_transactions",
+        handle_import_transactions,
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_CONFIG_ENTRY_ID): str,
+                vol.Required(ATTR_TRANSACTIONS): [
+                    vol.Schema(
+                        {
+                            vol.Required(ATTR_ACCOUNT): str,
+                            vol.Required(ATTR_DATE): cv.date,
+                            vol.Required(ATTR_AMOUNT): vol.Coerce(float),
+                            vol.Optional(ATTR_PAYEE): str,
+                            vol.Optional(ATTR_NOTES): str,
+                            vol.Optional(ATTR_CATEGORY): str,
+                            vol.Optional(ATTR_IMPORTED_ID): str,
+                            vol.Optional(ATTR_CLEARED, default=False): bool,
+                        }
+                    )
+                ],
             }
         ),
         supports_response=SupportsResponse.OPTIONAL,
@@ -209,3 +235,34 @@ async def handle_clear_account(call: ServiceCall) -> ServiceResponse:
         entry_id, account, deleted_count,
     )
     return {"deleted_count": deleted_count}
+
+
+async def handle_import_transactions(call: ServiceCall) -> ServiceResponse:
+    """Handle the import_transactions service action call.
+
+    Bulk variant of add_transaction: takes a list of transaction dicts and
+    commits them all in one go (see ActualBudget.import_transactions), for
+    backfilling a large batch (e.g. a bank statement export) without one
+    service call - and one Actual commit - per row.
+    """
+    entry_id = call.data[ATTR_CONFIG_ENTRY_ID]
+    transactions = call.data[ATTR_TRANSACTIONS]
+    _LOGGER.debug(
+        "actualbudget.import_transactions invoked for entry %s: %d transactions",
+        entry_id, len(transactions),
+    )
+    entry_data = _get_entry_data(call.hass, entry_id)
+    api: ActualBudget = entry_data["api"]
+    coordinator: ActualBudgetCoordinator = entry_data["coordinator"]
+
+    coordinator.set_syncing(True)
+    try:
+        created_count = await api.import_transactions(transactions)
+        await coordinator.async_refresh()
+    finally:
+        coordinator.set_syncing(False)
+    _LOGGER.debug(
+        "actualbudget.import_transactions completed for entry %s: %s transactions",
+        entry_id, created_count,
+    )
+    return {"created_count": created_count}
