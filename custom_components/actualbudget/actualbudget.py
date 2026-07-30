@@ -21,6 +21,7 @@ from actual.queries import (
     get_accounts,
     get_accumulated_budgeted_balance,
     get_budgets,
+    get_transactions,
     reconcile_transaction,
 )
 from requests.exceptions import ConnectionError, SSLError
@@ -251,6 +252,30 @@ class ActualBudget:
             )
             self.actual.commit()
             return str(txn.id)
+
+    async def clear_account(self, account: str) -> int:
+        """Delete every transaction on an account and commit. Returns the count deleted.
+
+        Uses Transactions.delete() (not raw SQL) so split/parent transactions
+        are torn down consistently, the same way the Actual GUI does it.
+        """
+        return await self.hass.async_add_executor_job(
+            self._clear_account_sync, account
+        )
+
+    def _clear_account_sync(self, account: str) -> int:
+        with self._lock:
+            session = self._ensure_session()
+            txns = get_transactions(session, account=account)
+            count = 0
+            for txn in txns:
+                if txn.is_child:
+                    # deleted as part of its parent's delete()
+                    continue
+                txn.delete()
+                count += 1
+            self.actual.commit()
+            return count
 
     # -- connection test ----------------------------------------------------
 
