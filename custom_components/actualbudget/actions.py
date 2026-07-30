@@ -24,6 +24,7 @@ from .const import (
     ATTR_CATEGORY,
     ATTR_CLEARED,
     ATTR_CONFIG_ENTRY_ID,
+    ATTR_CONFIRM,
     ATTR_DATE,
     ATTR_IMPORTED_ID,
     ATTR_NOTES,
@@ -101,6 +102,19 @@ def register_actions(hass: HomeAssistant) -> None:
         ),
         supports_response=SupportsResponse.OPTIONAL,
     )
+    hass.services.async_register(
+        DOMAIN,
+        "clear_account",
+        handle_clear_account,
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_CONFIG_ENTRY_ID): str,
+                vol.Required(ATTR_ACCOUNT): str,
+                vol.Required(ATTR_CONFIRM): bool,
+            }
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
 
 
 async def handle_bank_sync(call: ServiceCall) -> ServiceResponse:
@@ -158,3 +172,40 @@ async def handle_add_transaction(call: ServiceCall) -> ServiceResponse:
         "actualbudget.add_transaction completed for entry %s: %s", entry_id, transaction_id
     )
     return {"transaction_id": transaction_id}
+
+
+async def handle_clear_account(call: ServiceCall) -> ServiceResponse:
+    """Handle the clear_account service action call.
+
+    Deletes every transaction on the given account. Destructive and
+    irreversible (short of restoring a budget-file backup), so it requires
+    confirm: true to be passed explicitly - a missing/false confirm raises
+    instead of silently no-op-ing, so automations can't trigger this by
+    accident via a default value.
+    """
+    entry_id = call.data[ATTR_CONFIG_ENTRY_ID]
+    account = call.data[ATTR_ACCOUNT]
+    if not call.data.get(ATTR_CONFIRM):
+        raise ServiceValidationError(
+            "confirm must be set to true to clear an account - this permanently "
+            "deletes all its transactions"
+        )
+    _LOGGER.warning(
+        "actualbudget.clear_account invoked for entry %s, account %r - deleting all transactions",
+        entry_id, account,
+    )
+    entry_data = _get_entry_data(call.hass, entry_id)
+    api: ActualBudget = entry_data["api"]
+    coordinator: ActualBudgetCoordinator = entry_data["coordinator"]
+
+    coordinator.set_syncing(True)
+    try:
+        deleted_count = await api.clear_account(account)
+        await coordinator.async_refresh()
+    finally:
+        coordinator.set_syncing(False)
+    _LOGGER.warning(
+        "actualbudget.clear_account completed for entry %s, account %r: %s transactions deleted",
+        entry_id, account, deleted_count,
+    )
+    return {"deleted_count": deleted_count}
