@@ -87,3 +87,28 @@ import_transactions:
       required: true
       selector:
         object:
+
+set_budget:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: actualbudget
+    category:
+      required: true
+      example: "Spesa"
+      selector:
+        text:
+    amount:
+      required: true
+      example: 200.0
+      selector:
+        number:
+          mode: box
+          step: 0.01
+    months:
+      required: true
+      example: ["2026-08", "2026-09"]
+      selector:
+        object:
