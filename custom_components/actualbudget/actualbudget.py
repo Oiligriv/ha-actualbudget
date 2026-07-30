@@ -18,6 +18,7 @@ from actual.exceptions import (
     UnknownFileId,
 )
 from actual.queries import (
+    create_budget,
     get_accounts,
     get_accumulated_budgeted_balance,
     get_budgets,
@@ -283,6 +284,31 @@ class ActualBudget:
                     imported_id=t.get("imported_id"),
                     cleared=t.get("cleared", False),
                 )
+                count += 1
+            self.actual.commit()
+            return count
+
+    async def set_budget(
+        self, category: str, amount: float, months: list[str]
+    ) -> int:
+        """Set the budgeted (envelope) amount for a category across one or more months.
+
+        `months` are "YYYY-MM" strings. Uses create_budget (not a separate
+        update path), which already handles both create and replace: calling
+        this again for the same category/month overwrites the amount.
+        Returns the number of month-entries written.
+        """
+        return await self.hass.async_add_executor_job(
+            self._set_budget_sync, category, amount, months
+        )
+
+    def _set_budget_sync(self, category: str, amount: float, months: list[str]) -> int:
+        with self._lock:
+            session = self._ensure_session()
+            count = 0
+            for month_str in months:
+                year, month = (int(p) for p in month_str.split("-", 1))
+                create_budget(session, datetime.date(year, month, 1), category, amount)
                 count += 1
             self.actual.commit()
             return count
