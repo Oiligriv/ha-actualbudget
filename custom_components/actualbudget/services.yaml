@@ -58,3 +58,20 @@ add_transaction:
       default: false
       selector:
         boolean:
+
+clear_account:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: actualbudget
+    account:
+      required: true
+      example: "Checking"
+      selector:
+        text:
+    confirm:
+      required: true
+      selector:
+        boolean:
